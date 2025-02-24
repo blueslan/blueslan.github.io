@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>俄罗斯方块在线游戏 - 经典复刻版</title>
+    <meta name="description" content="免费在线俄罗斯方块游戏，经典玩法，支持键盘操作，快来挑战高分！">
+    <meta name="keywords" content="俄罗斯方块,在线游戏,网页游戏,休闲游戏">
+    <!-- 添加社交媒体分享信息 -->
+    <meta property="og:title" content="俄罗斯方块在线游戏">
+    <meta property="og:description" content="经典俄罗斯方块游戏，随时随地开始挑战！">
+    <meta property="og:type" content="website">
+    <!-- 添加移动设备视口设置 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { background: #202028; color: #fff; font-family: sans-serif; text-align: center; }
+        canvas { border: 2px solid #fff; }
+        .container { display: flex; justify-content: center; gap: 50px; margin-top: 20px; }
+        #score { font-size: 2em; margin-top: 0; }
+        .game-over { color: red; display: none; }
+        /* 添加响应式设计 */
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+                align-items: center;
+            }
+            canvas {
+                max-width: 100%;
+                height: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <canvas id="tetris" width="280" height="440"></canvas>
+        <div>
+            <p id="score">得分: 0</p>
+            <p class="game-over" id="gameOver">游戏结束!</p>
+            <p>操作说明：</p>
+            <p>←→：移动</p>
+            <p>↑：旋转</p>
+            <p>↓：加速</p>
+            <p>空格：直接掉落</p>
+            <button onclick="resetGame()">重新开始</button>
+            <div class="share-buttons">
+                <button onclick="share()">分享游戏</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+const canvas = document.getElementById('tetris');
+const context = canvas.getContext('2d');
+const scoreElement = document.getElementById('score');
+const gameOverElement = document.getElementById('gameOver');
+
+const BLOCK_SIZE = 20;
+context.scale(BLOCK_SIZE, BLOCK_SIZE);
+
+const COLORS = [
+    null,
+    '#FF0D72', '#0DC2FF', '#0DFF72',
+    '#F538FF', '#FF8E0D', '#FFE138',
+    '#3877FF'
+];
+
+const SHAPES = [
+    [],
+    [[0,0,0,0], [1,1,1,1], [0,0,0,0], [0,0,0,0]], // I
+    [[2,0,0], [2,2,2], [0,0,0]], // J
+    [[0,0,3], [3,3,3], [0,0,0]], // L
+    [[4,4], [4,4]], // O
+    [[0,5,5], [5,5,0], [0,0,0]], // S
+    [[0,6,0], [6,6,6], [0,0,0]], // T
+    [[7,7,0], [0,7,7], [0,0,0]]  // Z
+];
+
+let dropCounter = 0;
+let dropInterval = 1000;
+let lastTime = 0;
+let score = 0;
+let gameActive = true;
+
+const arena = createMatrix(14, 22);
+const player = {
+    pos: {x: 0, y: 0},
+    matrix: null
+};
+
+function createMatrix(w, h) {
+    return Array.from({length: h}, () => new Array(w).fill(0));
+}
+
+function collide(arena, player) {
+    const [m, o] = [player.matrix, player.pos];
+    for (let y = 0; y < m.length; y++) {
+        for (let x = 0; x < m[y].length; x++) {
+            if (m[y][x]) {
+                const arenaY = y + o.y;
+                const arenaX = x + o.x;
+                if (arenaX < 0 || arenaX >= arena[0].length || 
+                    arenaY >= arena.length ||
+                    (arena[arenaY] && arena[arenaY][arenaX])) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+function draw() {
+    context.fillStyle = '#000';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    drawMatrix(arena, {x: 0, y: 0});
+    drawMatrix(player.matrix, player.pos);
+}
+
+function drawMatrix(matrix, offset) {
+    matrix.forEach((row, y) => {
+        row.forEach((value, x) => {
+            if (value) {
+                context.fillStyle = COLORS[value];
+                context.fillRect(x + offset.x, y + offset.y, 1, 1);
+            }
+        });
+    });
+}
+
+function merge(arena, player) {
+    player.matrix.forEach((row, y) => {
+        row.forEach((value, x) => {
+            if (value) arena[y + player.pos.y][x + player.pos.x] = value;
+        });
+    });
+}
+
+function rotate(matrix) {
+    const N = matrix.length;
+    return matrix.map((row, i) => 
+        row.map((val, j) => matrix[N - 1 - j][i])
+    );
+}
+
+function arenaSweep() {
+    let rowCount = 1;
+    outer: for (let y = arena.length - 1; y > 0; y--) {
+        for (let x = 0; x < arena[y].length; x++) {
+            if (arena[y][x] === 0) continue outer;
+        }
+        const row = arena.splice(y, 1)[0].fill(0);
+        arena.unshift(row);
+        y++;
+        score += rowCount * 10;
+        rowCount *= 2;
+    }
+}
+
+function playerReset() {
+    const pieces = 'ILJOTSZ';
+    const rand = pieces[Math.floor(Math.random() * pieces.length)];
+    player.matrix = SHAPES[pieces.indexOf(rand) + 1];
+    player.pos.x = Math.floor(arena[0].length/2 - player.matrix[0].length/2);
+    player.pos.y = 0;
+
+    if (collide(arena, player)) {
+        gameActive = false;
+        gameOverElement.style.display = 'block';
+    }
+}
+
+function update(time = 0) {
+    if (!gameActive) return;
+    
+    const deltaTime = time - lastTime;
+    lastTime = time;
+    dropCounter += deltaTime;
+    
+    if (dropCounter > dropInterval) {
+        playerDrop();
+    }
+    
+    draw();
+    requestAnimationFrame(update);
+}
+
+function playerDrop() {
+    player.pos.y++;
+    if (collide(arena, player)) {
+        player.pos.y--;
+        merge(arena, player);
+        arenaSweep();
+        scoreElement.textContent = '得分: ' + score;
+        playerReset();
+    }
+    dropCounter = 0;
+}
+
+function resetGame() {
+    arena.forEach(row => row.fill(0));
+    score = 0;
+    gameActive = true;
+    gameOverElement.style.display = 'none';
+    scoreElement.textContent = '得分: 0';
+    playerReset();
+    update();
+}
+
+document.addEventListener('keydown', event => {
+    if (!gameActive) return;
+    
+    switch(event.keyCode) {
+        case 37: // ←
+            player.pos.x--;
+            if (collide(arena, player)) player.pos.x++;
+            break;
+        case 39: // →
+            player.pos.x++;
+            if (collide(arena, player)) player.pos.x--;
+            break;
+        case 40: // ↓
+            playerDrop();
+            break;
+        case 38: // ↑
+            const pos = player.pos.x;
+            let offset = 1;
+            const rotated = rotate(player.matrix);
+            player.matrix = rotated;
+            while (collide(arena, player)) {
+                player.pos.x += offset;
+                offset = -(offset + (offset > 0 ? 1 : -1));
+                if (Math.abs(offset) > player.matrix[0].length) {
+                    player.matrix = rotate(rotate(rotate(rotated)));
+                    player.pos.x = pos;
+                    return;
+                }
+            }
+            break;
+        case 32: // 空格键硬降
+            while(!collide(arena, player)) {
+                player.pos.y++;
+            }
+            player.pos.y--;
+            merge(arena, player);
+            arenaSweep();
+            scoreElement.textContent = '得分: ' + score;
+            playerReset();
+            break;
+    }
+});
+
+playerReset();
+update();
+
+// 添加分享函数
+function share() {
+    if (navigator.share) {
+        navigator.share({
+            title: '俄罗斯方块在线游戏',
+            text: '来玩这个有趣的俄罗斯方块游戏吧！我的最高分是: ' + score,
+            url: window.location.href
+        });
+    }
+}
+</script>
+</body>
+</html>
