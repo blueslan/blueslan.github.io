@@ -16,7 +16,45 @@
         .container { display: flex; justify-content: center; gap: 50px; margin-top: 20px; }
         #score { font-size: 2em; margin-top: 0; }
         .game-over { color: red; display: none; }
-        /* 添加响应式设计 */
+
+        /* 移动端控制按钮样式 */
+        .mobile-controls {
+            display: none;
+            margin-top: 20px;
+            width: 100%;
+            max-width: 280px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .controls-wrapper {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+        }
+        .left-controls, .right-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .control-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid #fff;
+            color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            min-width: 60px;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .control-btn:active {
+            background: rgba(255, 255, 255, 0.4);
+            transform: scale(0.95);
+        }
+
+        /* 响应式设计 */
         @media (max-width: 768px) {
             .container {
                 flex-direction: column;
@@ -25,6 +63,9 @@
             canvas {
                 max-width: 100%;
                 height: auto;
+            }
+            .mobile-controls {
+                display: block;
             }
         }
     </style>
@@ -43,6 +84,20 @@
             <button onclick="resetGame()">重新开始</button>
             <div class="share-buttons">
                 <button onclick="share()">分享游戏</button>
+            </div>
+        </div>
+    </div>
+    <!-- 添加移动端控制按钮 -->
+    <div class="mobile-controls">
+        <div class="controls-wrapper">
+            <div class="left-controls">
+                <button class="control-btn" id="rotateBtn">旋转</button>
+                <button class="control-btn" id="dropBtn">掉落</button>
+            </div>
+            <div class="right-controls">
+                <button class="control-btn" id="leftBtn">←</button>
+                <button class="control-btn" id="downBtn">↓</button>
+                <button class="control-btn" id="rightBtn">→</button>
             </div>
         </div>
     </div>
@@ -248,6 +303,74 @@ document.addEventListener('keydown', event => {
     }
 });
 
+// 添加移动端控制按钮的事件处理
+function initMobileControls() {
+    // 防止按钮触发时页面滚动
+    document.querySelectorAll('.control-btn').forEach(btn => {
+        btn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+        });
+    });
+
+    // 左移按钮
+    document.getElementById('leftBtn').addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (!gameActive) return;
+        player.pos.x--;
+        if (collide(arena, player)) player.pos.x++;
+    });
+
+    // 右移按钮
+    document.getElementById('rightBtn').addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (!gameActive) return;
+        player.pos.x++;
+        if (collide(arena, player)) player.pos.x--;
+    });
+
+    // 向下移动按钮
+    document.getElementById('downBtn').addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (!gameActive) return;
+        playerDrop();
+    });
+
+    // 旋转按钮
+    document.getElementById('rotateBtn').addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (!gameActive) return;
+        const pos = player.pos.x;
+        let offset = 1;
+        const rotated = rotate(player.matrix);
+        player.matrix = rotated;
+        while (collide(arena, player)) {
+            player.pos.x += offset;
+            offset = -(offset + (offset > 0 ? 1 : -1));
+            if (Math.abs(offset) > player.matrix[0].length) {
+                player.matrix = rotate(rotate(rotate(rotated)));
+                player.pos.x = pos;
+                return;
+            }
+        }
+    });
+
+    // 直接掉落按钮
+    document.getElementById('dropBtn').addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (!gameActive) return;
+        while(!collide(arena, player)) {
+            player.pos.y++;
+        }
+        player.pos.y--;
+        merge(arena, player);
+        arenaSweep();
+        scoreElement.textContent = '得分: ' + score;
+        playerReset();
+    });
+}
+
+// 初始化移动端控制
+initMobileControls();
 playerReset();
 update();
 
